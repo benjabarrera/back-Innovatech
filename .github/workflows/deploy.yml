@@ -1,0 +1,63 @@
+name: CI/CD Pipeline Backend
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout del código
+        uses: actions/checkout@v3
+
+      - name: Iniciar sesión en Docker Hub
+        uses: docker/login-action@v2
+        with:
+          username: benjabarrera
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      # 1. Construir y subir API Ventas
+      - name: Construir imagen Ventas
+        uses: docker/build-push-action@v4
+        with:
+          context: ./back-Ventas_SpringBoot/Springboot-API-REST
+          push: true
+          tags: benjabarrera/ep2-backend-ventas:latest
+
+      # 2. Construir y subir API Despachos
+      - name: Construir imagen Despachos
+        uses: docker/build-push-action@v4
+        with:
+          context: ./back-Despachos_SpringBoot/Springboot-API-REST-DESPACHO
+          push: true
+          tags: benjabarrera/ep2-backend-despachos:latest
+
+  deploy:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    steps:
+      - name: Desplegar en Backend (Privado) vía Frontend (Puente)
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: 10.0.144.119 # IP Privada de tu Backend
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          proxy_host: ${{ secrets.EC2_HOST }} # IP Pública de tu Frontend
+          proxy_username: ${{ secrets.EC2_USER }}
+          proxy_key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            # Bajar las imágenes frescas
+            docker pull benjabarrera/ep2-backend-ventas:latest
+            docker pull benjabarrera/ep2-backend-despachos:latest
+            
+            # Detener y borrar contenedores antiguos si existen
+            docker stop ventas despachos || true
+            docker rm ventas despachos || true
+            
+            # Levantar Ventas (Nginx lo busca en el 8080)
+            docker run -d --name ventas -p 8080:8080 benjabarrera/ep2-backend-ventas:latest
+            
+            # Levantar Despachos (Nginx lo busca en el 8081)
+            docker run -d --name despachos -p 8081:8080 benjabarrera/ep2-backend-despachos:latest
