@@ -41,10 +41,10 @@ jobs:
       - name: Desplegar en Backend (Privado) vía Frontend (Puente)
         uses: appleboy/ssh-action@v1.0.3
         with:
-          host: 10.0.144.119 # IP Privada de tu Backend
+          host: 10.0.144.119
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
-          proxy_host: ${{ secrets.EC2_HOST }} # IP Pública de tu Frontend
+          proxy_host: ${{ secrets.EC2_HOST }}
           proxy_username: ${{ secrets.EC2_USER }}
           proxy_key: ${{ secrets.EC2_SSH_KEY }}
           script: |
@@ -56,8 +56,8 @@ jobs:
             docker stop ventas despachos || true
             docker rm ventas despachos || true
             
-            # Levantar Ventas (Nginx lo busca en el 8080)
+            # Levantar Ventas en el puerto 8080
             docker run -d --name ventas -p 8080:8080 benjabarrera/ep2-backend-ventas:latest
             
-            # Levantar Despachos (Nginx lo busca en el 8081)
+            # Levantar Despachos en el puerto 8081
             docker run -d --name despachos -p 8081:8080 benjabarrera/ep2-backend-despachos:latest
