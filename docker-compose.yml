@@ -1,0 +1,74 @@
+# Stack del BACKEND para la instancia EC2 privada.
+# Levanta la base de datos + los dos microservicios usando las imagenes ya
+# publicadas en Docker Hub por el pipeline de GitHub Actions.
+#
+# Uso manual (dentro de la EC2):  docker compose pull && docker compose up -d
+# El pipeline (.github/workflows/deploy.yml) hace esto automaticamente.
+
+services:
+  # ---------- Base de datos MySQL ----------
+  mysql:
+    image: mysql:8.0
+    container_name: ep2-mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:-rootsecret123}
+      MYSQL_DATABASE: ${DB_NAME:-despachos_db}
+      MYSQL_USER: ${DB_USERNAME:-appuser}
+      MYSQL_PASSWORD: ${DB_PASSWORD:-appsecret123}
+    volumes:
+      # Volumen con nombre => los datos sobreviven aunque se borre el contenedor (persistencia)
+      - mysql_data:/var/lib/mysql
+    networks:
+      - app-net
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 --silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    restart: unless-stopped
+
+  # ---------- Microservicio Ventas (puerto 8080) ----------
+  ventas:
+    image: benjabarrera/ep2-ventas:latest
+    container_name: ep2-ventas
+    environment:
+      DB_ENDPOINT: mysql      # nombre del servicio de la BD dentro de la red de Docker
+      DB_PORT: 3306
+      DB_NAME: ${DB_NAME:-despachos_db}
+      DB_USERNAME: ${DB_USERNAME:-appuser}
+      DB_PASSWORD: ${DB_PASSWORD:-appsecret123}
+    ports:
+      - "8080:8080"           # publicado para que el Nginx del Frontend (otra EC2) pueda alcanzarlo
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - app-net
+    restart: unless-stopped
+
+  # ---------- Microservicio Despachos (puerto 8081) ----------
+  despachos:
+    image: benjabarrera/ep2-despachos:latest
+    container_name: ep2-despachos
+    environment:
+      DB_ENDPOINT: mysql
+      DB_PORT: 3306
+      DB_NAME: ${DB_NAME:-despachos_db}
+      DB_USERNAME: ${DB_USERNAME:-appuser}
+      DB_PASSWORD: ${DB_PASSWORD:-appsecret123}
+    ports:
+      - "8081:8081"
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - app-net
+    restart: unless-stopped
+
+volumes:
+  mysql_data:
+
+networks:
+  app-net:
+    driver: bridge

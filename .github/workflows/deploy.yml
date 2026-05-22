@@ -1,0 +1,73 @@
+name: CI/CD Pipeline Backend
+
+# Se dispara al hacer push a la rama "deploy"
+on:
+  push:
+    branches:
+      - deploy
+
+jobs:
+  # ===== 1) Construir y publicar las 2 imagenes en Docker Hub =====
+  build-and-push:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout del codigo
+        uses: actions/checkout@v4
+
+      - name: Iniciar sesion en Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: benjabarrera
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build & Push - Ventas
+        uses: docker/build-push-action@v6
+        with:
+          context: ./back-Ventas_SpringBoot/Springboot-API-REST
+          push: true
+          tags: benjabarrera/ep2-ventas:latest
+
+      - name: Build & Push - Despachos
+        uses: docker/build-push-action@v6
+        with:
+          context: ./back-Despachos_SpringBoot/Springboot-API-REST-DESPACHO
+          push: true
+          tags: benjabarrera/ep2-despachos:latest
+
+  # ===== 2) Desplegar en la EC2 PRIVADA (a traves del Front como jump host) =====
+  deploy:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout del codigo
+        uses: actions/checkout@v4
+
+      # La EC2 del backend es privada: no se puede entrar directo desde Internet.
+      # Por eso usamos la EC2 publica del Front (EC2_HOST) como "puente" (proxy_host).
+      - name: Copiar docker-compose.yml a la EC2 privada
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.BACK_PRIVATE_IP }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          proxy_host: ${{ secrets.EC2_HOST }}
+          proxy_username: ${{ secrets.EC2_USER }}
+          proxy_key: ${{ secrets.EC2_SSH_KEY }}
+          source: "docker-compose.yml"
+          target: "~/app"
+
+      - name: Desplegar contenedores (pull + up)
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.BACK_PRIVATE_IP }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          proxy_host: ${{ secrets.EC2_HOST }}
+          proxy_username: ${{ secrets.EC2_USER }}
+          proxy_key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            echo "${{ secrets.DOCKERHUB_TOKEN }}" | docker login -u benjabarrera --password-stdin
+            cd ~/app
+            docker compose pull
+            docker compose up -d
+            docker image prune -f
