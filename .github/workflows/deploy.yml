@@ -42,29 +42,22 @@ jobs:
       - name: Checkout del codigo
         uses: actions/checkout@v4
 
-      # La EC2 del backend es privada: no se puede entrar directo desde Internet.
-      # Por eso usamos la EC2 publica del Front (EC2_HOST) como "puente" (proxy_host).
-      - name: Copiar docker-compose.yml a la EC2 privada
+      # La EC2 del backend es publica: nos conectamos DIRECTO por SSH (sin jump host).
+      - name: Copiar docker-compose.yml a la EC2 del backend
         uses: appleboy/scp-action@v0.1.7
         with:
-          host: ${{ secrets.BACK_PRIVATE_IP }}
+          host: ${{ secrets.BACK_HOST }}
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
-          proxy_host: ${{ secrets.EC2_HOST }}
-          proxy_username: ${{ secrets.EC2_USER }}
-          proxy_key: ${{ secrets.EC2_SSH_KEY }}
           source: "docker-compose.yml"
           target: "~/app"
 
       - name: Desplegar contenedores (pull + up)
         uses: appleboy/ssh-action@v1.0.3
         with:
-          host: ${{ secrets.BACK_PRIVATE_IP }}
+          host: ${{ secrets.BACK_HOST }}
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
-          proxy_host: ${{ secrets.EC2_HOST }}
-          proxy_username: ${{ secrets.EC2_USER }}
-          proxy_key: ${{ secrets.EC2_SSH_KEY }}
           script: |
             echo "${{ secrets.DOCKERHUB_TOKEN }}" | docker login -u benjabarrera --password-stdin
             cd ~/app

@@ -23,7 +23,7 @@ Backend del proyecto **EP2 (Innovatech Chile)**. Está compuesto por **dos micro
 - **despachos**: API de despachos. Expone `GET/POST/PUT/DELETE /api/v1/despachos`.
 - **mysql**: base de datos compartida. Sus datos persisten en un **volumen Docker** llamado `mysql_data`.
 
-> Esta instancia es **privada** (sin acceso desde Internet). Solo recibe tráfico desde la instancia del Frontend.
+> Aunque la instancia tenga IP pública, su **Security Group solo permite tráfico desde el Frontend** en los puertos 8080/8081, por lo que la API **no queda expuesta a Internet**.
 
 ---
 
@@ -139,15 +139,14 @@ Esto reduce el tamaño de la imagen final y mejora la seguridad.
 El archivo `.github/workflows/deploy.yml` se ejecuta al hacer **push a la rama `deploy`** y realiza:
 
 1. **Build & Push**: construye las imágenes `benjabarrera/ep2-ventas` y `benjabarrera/ep2-despachos` y las publica en **Docker Hub**.
-2. **Deploy**: como la EC2 del backend es **privada**, se conecta a través de la EC2 pública del Frontend (*jump host*), copia el `docker-compose.yml` y ejecuta `docker compose pull && docker compose up -d`.
+2. **Deploy**: se conecta por SSH **directo** a la EC2 del backend, copia el `docker-compose.yml` y ejecuta `docker compose pull && docker compose up -d`.
 
 ### Secrets requeridos (en *Settings → Secrets → Actions* de este repo)
 
 | Secret | Descripción |
 |---|---|
 | `DOCKERHUB_TOKEN` | Access Token de Docker Hub |
-| `EC2_HOST` | IP **pública** de la EC2 del Frontend (sirve de puente) |
-| `BACK_PRIVATE_IP` | IP **privada** de la EC2 del Backend |
+| `BACK_HOST` | IP **pública** de la EC2 del Backend |
 | `EC2_USER` | Usuario SSH (`ec2-user` o `ubuntu`) |
 | `EC2_SSH_KEY` | Contenido de la llave privada `.pem` |
 
