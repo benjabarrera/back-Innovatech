@@ -38,15 +38,12 @@ jobs:
     needs: build-and-push
     runs-on: ubuntu-latest
     steps:
-      - name: Desplegar en Backend (Privado) vía Frontend (Puente)
+      - name: Desplegar en EC2 del Backend (Acceso Directo)
         uses: appleboy/ssh-action@v1.0.3
         with:
-          host: 10.0.144.119
+          host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
-          proxy_host: ${{ secrets.EC2_HOST }}
-          proxy_username: ${{ secrets.EC2_USER }}
-          proxy_key: ${{ secrets.EC2_SSH_KEY }}
           script: |
             # Bajar las imágenes frescas
             docker pull benjabarrera/ep2-backend-ventas:latest
