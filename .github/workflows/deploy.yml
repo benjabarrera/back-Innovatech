@@ -26,7 +26,7 @@ jobs:
           push: true
           tags: benjabarrera/ep2-backend-ventas:latest
 
-      # 2. Construir y subir API Despachos
+      # 2. Construir y subi API Despachos
       - name: Construir imagen Despachos
         uses: docker/build-push-action@v4
         with:
