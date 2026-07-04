@@ -1,66 +1,58 @@
 name: CI/CD Pipeline Backend
 
-# Se dispara al hacer push a la rama "deploy"
 on:
   push:
     branches:
       - deploy
 
 jobs:
-  # ===== 1) Construir y publicar las 2 imagenes en Docker Hub =====
   build-and-push:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout del codigo
-        uses: actions/checkout@v4
+      - name: Checkout del código
+        uses: actions/checkout@v3
 
-      - name: Iniciar sesion en Docker Hub
-        uses: docker/login-action@v3
+      - name: Configurar credenciales de AWS
+        uses: aws-actions/configure-aws-credentials@v4
         with:
-          username: benjabarrera
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-region: us-east-1
 
-      - name: Build & Push - Ventas
-        uses: docker/build-push-action@v6
+      - name: Iniciar sesión en Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      # 1. Construir y subir API Ventas a ECR
+      - name: Construir imagen Ventas
+        uses: docker/build-push-action@v4
         with:
           context: ./back-Ventas_SpringBoot/Springboot-API-REST
           push: true
-          tags: benjabarrera/ep2-ventas:latest
+          tags: 994831955535.dkr.ecr.us-east-1.amazonaws.com/innovatech-ventas:latest
 
-      - name: Build & Push - Despachos
-        uses: docker/build-push-action@v6
+      # 2. Construir y subir API Despachos a ECR
+      - name: Construir imagen Despachos
+        uses: docker/build-push-action@v4
         with:
           context: ./back-Despachos_SpringBoot/Springboot-API-REST-DESPACHO
           push: true
-          tags: benjabarrera/ep2-despachos:latest
+          tags: 994831955535.dkr.ecr.us-east-1.amazonaws.com/innovatech-despachos:latest
 
-  # ===== 2) Desplegar en la EC2 PRIVADA (a traves del Front como jump host) =====
   deploy:
     needs: build-and-push
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout del codigo
-        uses: actions/checkout@v4
-
-      # La EC2 del backend es publica: nos conectamos DIRECTO por SSH (sin jump host).
-      - name: Copiar docker-compose.yml a la EC2 del backend
-        uses: appleboy/scp-action@v0.1.7
+      - name: Configurar credenciales de AWS
+        uses: aws-actions/configure-aws-credentials@v4
         with:
-          host: ${{ secrets.BACK_HOST }}
-          username: ${{ secrets.EC2_USER }}
-          key: ${{ secrets.EC2_SSH_KEY }}
-          source: "docker-compose.yml"
-          target: "~/app"
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-region: us-east-1
 
-      - name: Desplegar contenedores (pull + up)
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.BACK_HOST }}
-          username: ${{ secrets.EC2_USER }}
-          key: ${{ secrets.EC2_SSH_KEY }}
-          script: |
-            echo "${{ secrets.DOCKERHUB_TOKEN }}" | docker login -u benjabarrera --password-stdin
-            cd ~/app
-            docker compose pull
-            docker compose up -d
-            docker image prune -f
+      - name: Desplegar en ECS (Fargate)
+        run: |
+          aws ecs update-service --cluster innovatech-cluster --service ventas --force-new-deployment
+          aws ecs update-service --cluster innovatech-cluster --service despachos --force-new-deployment
